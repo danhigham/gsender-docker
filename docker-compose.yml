@@ -1,5 +1,10 @@
-# Run this on your Docker host (the amd64 box that the CNC plugs into).
+# Run this on your Docker host.
 #   docker compose pull && docker compose up -d
+#
+# Network connection (CNC on a remote Pi bridge): leave `devices:` commented
+# out. The container reaches the bridge over the LAN on the default bridge
+# network; set the bridge IP + port in gSender Settings -> Connection and use
+# the Ethernet connect option. See ../pi-bridge/ for the Pi ser2net setup.
 services:
   gsender:
     image: ghcr.io/danhigham/gsender:latest
@@ -7,12 +12,13 @@ services:
     restart: unless-stopped
     ports:
       - "8080:8080"            # web UI -> http://<host>:8080
-    devices:
-      # Map your CNC's serial device into the container. Find it with:
+    # devices:
+      # ONLY needed if the CNC is plugged directly into this Docker host (local
+      # serial instead of the network bridge). Find it with:
       #   ls -l /dev/serial/by-id/
       # Prefer the stable by-id path on the left so a replug doesn't renumber
       # ttyUSB0 <-> ttyUSB1 on you. The right-hand side is what gSender sees.
-      - "/dev/serial/by-id/usb-FTDI_xxxx-if00-port0:/dev/ttyUSB0"
+      # - "/dev/serial/by-id/usb-FTDI_xxxx-if00-port0:/dev/ttyUSB0"
       # ...or just the simple path if you only have one adapter:
       # - "/dev/ttyUSB0:/dev/ttyUSB0"
     volumes:

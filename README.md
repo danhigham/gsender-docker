@@ -62,6 +62,23 @@ Put the `by-id` path in `docker-compose.yml` under `devices:` (it's stable
 across replugs, unlike `ttyUSB0`/`ttyACM0`). The container always sees it as
 `/dev/ttyUSB0`.
 
+### Connecting to the CNC over the network (no local serial device)
+
+If the CNC isn't plugged into the Docker host — e.g. it hangs off a separate Pi
+acting as a serial-to-network bridge — gSender connects over TCP instead of a
+local serial port. Leave `devices:` commented out in `docker-compose.yml`; the
+container reaches the bridge as an ordinary outbound LAN connection (the default
+bridge network is fine, no `network_mode: host` needed).
+
+gSender's **Ethernet** connection opens a *raw TCP socket* to `IP:port`
+(default port `23`) and speaks the grbl/grblHAL protocol over it. In the web UI,
+set the bridge's **IP** and **Ethernet port** under **Settings → Connection**,
+then click the **Ethernet** entry in the Connect dropdown. The target must be a
+**numeric IP** — hostnames aren't accepted.
+
+See [`pi-bridge/`](./pi-bridge/) for the Pi `ser2net` setup that exposes a
+USB-only grbl/grblHAL controller as that TCP socket.
+
 ### Setting the controller without the UI
 
 The default command runs `--remote` and lets you choose the controller in the

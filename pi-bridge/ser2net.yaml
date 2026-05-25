@@ -1,0 +1,34 @@
+%YAML 1.1
+---
+# ser2net v4 config: bridge the CNC's USB serial port to a RAW TCP socket so the
+# gSender container (on your Docker host) can connect to it over the network.
+#
+#     CNC  --USB-->  Pi (this, :23)  --TCP/LAN-->  gSender container
+#
+# Install:  sudo apt install -y ser2net
+# Deploy:   copy this to /etc/ser2net.yaml, edit the connector path below, then
+#           sudo systemctl enable --now ser2net && sudo systemctl restart ser2net
+#
+# IMPORTANT: gSender opens a *raw* TCP socket (no telnet IAC negotiation), so the
+# accepter must be plain `tcp`, never `telnet(...)` — otherwise telnet option
+# bytes corrupt the g-code stream.
+
+connection: &cnc
+  # gSender's default ethernet port is 23. If you change it here, also change it
+  # in gSender: Settings -> Connection -> Ethernet port.
+  accepter: tcp,23
+  enable: on
+
+  # CNC serial device + line settings. 115200n81 = 115200 baud, 8 data bits,
+  # no parity, 1 stop bit (standard for grbl / grblHAL).
+  # Use the stable /dev/serial/by-id/... path so a replug or reboot can't
+  # renumber it. Find yours with:  ls -l /dev/serial/by-id/
+  # `local` sets CLOCAL so a USB adapter without carrier-detect doesn't stall.
+  connector: serialdev,/dev/serial/by-id/usb-FTDI_xxxx-if00-port0,115200n81,local
+
+  options:
+    # If gSender reconnects (e.g. after a browser refresh), drop the stale
+    # client and accept the new one instead of refusing it.
+    kickolduser: true
+    # grbl is single-master: only one client may talk to the controller.
+    max-connections: 1
