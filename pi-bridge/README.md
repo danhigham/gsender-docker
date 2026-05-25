@@ -1,4 +1,4 @@
-# Pi Zero serial-to-network bridge (ser2net)
+# Pi serial-to-network bridge (ser2net)
 
 Your CNC controller is USB-only (plain grbl/grblHAL), so the Pi attached to the
 CNC turns its USB serial port into a raw TCP socket. The gSender container —
@@ -21,16 +21,27 @@ gSender validates the target as a **numeric IPv4 address** — hostnames and
 `*.local` won't work. Add a DHCP reservation for the Pi's MAC on your router, or
 set a static IP. Note the address (e.g. `192.168.1.50`).
 
-> A Pi Zero W / Zero 2 W is **WiFi-only** (no Ethernet jack). WiFi works but is
-> less robust during a job; for wired reliability add a USB-OTG Ethernet adapter.
+> A Pi 2 Model B has a built-in wired Ethernet jack — plug it straight into the
+> network for a stable link (100 Mbit is far more than a 115200-baud stream
+> needs). A DHCP reservation is the easiest way to keep its IP fixed.
 
 ## 2. Install ser2net
 
 ```bash
 sudo apt update && sudo apt install -y ser2net
+ser2net -v
 ```
 
-(Current Raspberry Pi OS ships ser2net v4, which uses the YAML config here.)
+Current Raspberry Pi OS (Bookworm) ships **ser2net v4**, which uses the
+`ser2net.yaml` in this folder. If `ser2net -v` reports **3.x** (older Pi OS
+image), the config is instead a single line in `/etc/ser2net.conf`:
+
+```
+23:raw:0:/dev/serial/by-id/usb-FTDI_xxxx-if00-port0:115200 8DATABITS NONE 1STOPBIT
+```
+
+(`raw` = no telnet negotiation, same requirement as the v4 config.) Either way
+it's the same bridge — pick the format that matches your version.
 
 ## 3. Find the CNC serial device
 
