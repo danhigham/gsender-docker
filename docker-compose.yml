@@ -1,0 +1,27 @@
+# Run this on your Docker host (the amd64 box that the CNC plugs into).
+#   docker compose pull && docker compose up -d
+services:
+  gsender:
+    image: ghcr.io/danhigham/gsender:latest
+    container_name: gsender
+    restart: unless-stopped
+    ports:
+      - "8080:8080"            # web UI -> http://<host>:8080
+    devices:
+      # Map your CNC's serial device into the container. Find it with:
+      #   ls -l /dev/serial/by-id/
+      # Prefer the stable by-id path on the left so a replug doesn't renumber
+      # ttyUSB0 <-> ttyUSB1 on you. The right-hand side is what gSender sees.
+      - "/dev/serial/by-id/usb-FTDI_xxxx-if00-port0:/dev/ttyUSB0"
+      # ...or just the simple path if you only have one adapter:
+      # - "/dev/ttyUSB0:/dev/ttyUSB0"
+    volumes:
+      - gsender-data:/data    # ~/.cncrc config + uploaded G-code, persisted
+    # The container runs as root, so a mapped device is accessible without
+    # extra group juggling. If you later run it as a non-root user and hit
+    # permission errors on the serial port, add the host's dialout GID here:
+    # group_add:
+    #   - "20"   # `getent group dialout` on the host shows the right number
+
+volumes:
+  gsender-data:

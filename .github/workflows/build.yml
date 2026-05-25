@@ -1,0 +1,110 @@
+name: Build gSender image
+
+# Forks don't receive upstream releases, so we *poll* Sienci-Labs/gsender for
+# new release tags on a schedule and build whatever's newest. You can also
+# trigger a build by hand (optionally pinning a specific tag/branch).
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "gSender git ref to build (tag or branch). Leave blank for the latest upstream release."
+        required: false
+        default: ""
+      force:
+        description: "Rebuild even if the image tag already exists."
+        type: boolean
+        default: false
+  schedule:
+    # Daily at 06:17 UTC. (GitHub disables schedules on repos with no activity
+    # for 60 days — push a commit occasionally to keep it alive.)
+    - cron: "17 6 * * *"
+
+concurrency:
+  group: build-gsender
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE: ghcr.io/${{ github.repository_owner }}/gsender
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    outputs:
+      ref: ${{ steps.pick.outputs.ref }}
+      version: ${{ steps.pick.outputs.version }}
+      needs_build: ${{ steps.check.outputs.needs_build }}
+    steps:
+      - name: Resolve target version
+        id: pick
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_REF: ${{ github.event.inputs.ref }}
+        run: |
+          set -euo pipefail
+          if [ -n "${INPUT_REF}" ]; then
+            REF="${INPUT_REF}"
+          else
+            REF="$(gh api repos/Sienci-Labs/gsender/releases/latest --jq .tag_name)"
+          fi
+          echo "ref=${REF}"               >> "$GITHUB_OUTPUT"
+          echo "version=${REF#v}"         >> "$GITHUB_OUTPUT"   # strip leading v for a clean tag
+          echo "Target gSender ref: ${REF}"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Skip if this version was already built
+        id: check
+        env:
+          FORCE: ${{ github.event.inputs.force }}
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.pick.outputs.version }}"
+          if [ "${FORCE}" = "true" ]; then
+            echo "needs_build=true" >> "$GITHUB_OUTPUT"
+            echo "force=true — building ${IMAGE}:${TAG}"
+          elif docker manifest inspect "${IMAGE}:${TAG}" >/dev/null 2>&1; then
+            echo "needs_build=false" >> "$GITHUB_OUTPUT"
+            echo "${IMAGE}:${TAG} already exists — nothing to do."
+          else
+            echo "needs_build=true" >> "$GITHUB_OUTPUT"
+            echo "${IMAGE}:${TAG} not found — will build."
+          fi
+
+  build:
+    needs: resolve
+    if: needs.resolve.outputs.needs_build == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          build-args: |
+            GSENDER_REF=${{ needs.resolve.outputs.ref }}
+          tags: |
+            ${{ env.IMAGE }}:${{ needs.resolve.outputs.version }}
+            ${{ env.IMAGE }}:latest
+          push: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
